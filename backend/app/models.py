@@ -116,8 +116,61 @@ class ServiceConfig(BaseModel):
 
 
 class ComposeConfig(BaseModel):
+    """Model for complete docker-compose configuration"""
+    
+    version: str = Field(
+        default="3.8",
+        description="Docker Compose file version"
+    )
+    
+    services: List[ServiceConfig] = Field(
+        ...,
+        description="List of services in the compose file",
+        min_items=1
+    )
+    
+    @validator('services')
+    def validate_unique_names(cls, v):
+        """Ensure all service names are unique"""
+        names = [service.name for service in v]
+        if len(names) != len(set(names)):
+            duplicates = [name for name in names if names.count(name) > 1]
+            raise ValueError(f"Duplicate service names found: {duplicates}")
+        return v
+    
+    @validator('services')
+    def validate_dependencies(cls, v):
+        """Ensure depends_on references exist"""
+        service_names = {service.name for service in v}
+        for service in v:
+            for dep in service.depends_on:
+                if dep not in service_names:
+                    raise ValueError(
+                        f"Service '{service.name}' depends on '{dep}' which doesn't exist"
+                    )
+        return v
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "version": "3.8",
+                "services": [
+                    {
+                        "name": "nginx",
+                        "image": "nginx:latest",
+                        "ports": ["80:80"],
+                        "networks": ["frontend"]
+                    },
+                    {
+                        "name": "postgres",
+                        "image": "postgres:14",
+                        "environment": {"POSTGRES_PASSWORD": "secret"},
+                        "networks": ["backend"]
+                    }
+                ]
+            }
+        }
 
 class ValidationError(BaseModel):
 
 class ValidationResponse(BaseMOdel):
-
