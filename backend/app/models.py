@@ -63,6 +63,56 @@ class ServiceConfig(BaseModel):
         example="npm start"
     )
 
+    # Validators
+    @validator('ports')
+    def validate_ports(cls, v):
+        """Ensure ports are in correct format"""
+        for port in v:
+            if ':' not in port:
+                raise ValueError(f"Port must be in format 'host:container', got: {port}")
+            parts = port.split(':')
+            if len(parts) != 2:
+                raise ValueError(f"Invalid port format: {port}")
+            # Validate port numbers
+            try:
+                host_port, container_port = parts
+                int(host_port.split('/')[0])  # Handle tcp/udp suffix
+                int(container_port.split('/')[0])
+            except ValueError:
+                raise ValueError(f"Port numbers must be integers: {port}")
+        return v
+    
+    @validator('name')
+    def validate_name(cls, v):
+        """Ensure service name is valid"""
+        if not v or not v.strip():
+            raise ValueError("Service name cannot be empty")
+        # Docker service names: lowercase, alphanumeric, hyphens, underscores
+        import re
+        if not re.match(r'^[a-z0-9_-]+$', v):
+            raise ValueError("Service name must be lowercase alphanumeric with hyphens/underscores")
+        return v
+    
+    @validator('image')
+    def validate_image(cls, v):
+        """Ensure image name is not empty"""
+        if not v or not v.strip():
+            raise ValueError("Image name cannot be empty")
+        return v
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "name": "nginx",
+                "image": "nginx:latest",
+                "ports": ["80:80"],
+                "environment": {"NGINX_HOST": "localhost"},
+                "volumes": ["./html:/usr/share/nginx/html:ro"],
+                "networks": ["frontend"],
+                "depends_on": [],
+                "restart": "unless-stopped"
+            }
+        }
 
 
 class ComposeConfig(BaseModel):
