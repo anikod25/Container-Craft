@@ -18,3 +18,25 @@ app.add_middleware(
 @app.get("/api/health")
 async def health_check():
     return {"status" : "Healthy"}
+
+
+# creating an endpoint for templates from its repsctive folder.
+from templates.compose_templates import TEMPLATES
+
+@app.get("/api/templates")
+async def get_templates():
+    return TEMPLATES
+
+from core.yaml_generator import YAMLGenerator
+from models import ComposeConfig
+
+@app.post("/api/generate_yaml")
+async def generate_yaml(request: Request):
+    try:
+        data = await request.json()
+        compose_config = ComposeConfig(**data)
+        yaml_generator = YAMLGenerator()
+        yaml_output = yaml_generator.generate_yaml(compose_config)
+        return Response(content=yaml_output, media_type="text/yaml")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
