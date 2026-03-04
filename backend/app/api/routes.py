@@ -14,9 +14,6 @@ router = APIRouter()
 generator = YAMLGenerator()
 
 
-# ---------------------------------------------------------------------------
-# POST /compose/generate
-# ---------------------------------------------------------------------------
 @router.post(
     "/compose/generate",
     response_class=PlainTextResponse,
@@ -38,9 +35,6 @@ def generate_compose(compose_config: ComposeConfig) -> str:
         raise HTTPException(status_code=500, detail=f"YAML generation failed: {str(e)}")
 
 
-# ---------------------------------------------------------------------------
-# POST /compose/validate
-# ---------------------------------------------------------------------------
 @router.post(
     "/compose/validate",
     response_model=ValidationResponse,
@@ -119,9 +113,6 @@ def validate_compose(compose_config: ComposeConfig) -> ValidationResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# POST /compose/preview
-# ---------------------------------------------------------------------------
 @router.post(
     "/compose/preview",
     response_class=PlainTextResponse,
@@ -140,9 +131,6 @@ def preview_service(service: ServiceConfig) -> str:
         raise HTTPException(status_code=422, detail=str(e))
 
 
-# ---------------------------------------------------------------------------
-# Helper: cycle detection
-# ---------------------------------------------------------------------------
 def _detect_cycles(dep_map: dict) -> List[List[str]]:
     """
     Detect cycles in the dependency graph using DFS.
