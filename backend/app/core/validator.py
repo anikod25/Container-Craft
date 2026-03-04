@@ -49,3 +49,40 @@ def check_port_conflicts(services: List[ServiceConfig], errors: List[ValidationE
                 ))
             else:
                 seen_ports[host_port] = service.name
+
+def check_image_names(services: List[ServiceConfig], errors: List[ValidationError]) -> None:
+    """
+    Validate that image names follow Docker naming conventions.
+    Valid formats: nginx, nginx:latest, myrepo/image:tag, registry.io/image:v1.0
+    
+    argument:: services: List of ServiceConfig
+    argument:: errors: List to append ValidationError objects into
+    """
+    # Matches: optional registry prefix, image name, optional tag
+    image_pattern = re.compile(
+        r'^[a-zA-Z0-9]([a-zA-Z0-9._\-/]*[a-zA-Z0-9])?(:[a-zA-Z0-9._\-]+)?$'
+    )
+
+    for service in services:
+        image = service.image.strip()
+
+        if not image:
+            errors.append(ValidationError(
+                service=service.name,
+                field="image",
+                message="Image name cannot be empty.",
+                severity="error"
+            ))
+            continue
+
+        if not image_pattern.match(image):
+            errors.append(ValidationError(
+                service=service.name,
+                field="image",
+                message=(
+                    f"'{image}' is not a valid Docker image name. "
+                    f"Expected format: 'image', 'image:tag', or 'registry/image:tag'."
+                ),
+                severity="error"
+            ))
+
