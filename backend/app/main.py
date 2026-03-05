@@ -40,3 +40,17 @@ async def generate_yaml(request: Request):
         return Response(content=yaml_output, media_type="text/yaml")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+from core.validator import validate_compose_config
+
+#endpoint for validating the compose configuration sent by the frontend, it will return a response with valid flag and list of errors if any.
+
+@app.post("/api/validate")
+async def validate(request: Request):
+    data = await request.json()
+    compose_config = ComposeConfig(**data)
+    errors = validate_compose_config(compose_config.services)
+    return {
+        "valid": len(errors) == 0,
+        "errors": errors
+    }
