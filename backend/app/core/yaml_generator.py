@@ -1,6 +1,16 @@
 from typing import List, Dict, Any
 import yaml
-from app.models import ServiceConfig, ComposeConfig
+# Handle imports for both module and script execution
+try:
+    # When imported as a module (normal case)
+    from ..models import ServiceConfig, ComposeConfig
+except ImportError:
+    # When run as a script
+    import sys
+    from pathlib import Path
+    backend_dir = Path(__file__).parent.parent.parent
+    sys.path.insert(0, str(backend_dir))
+    from app.models import ServiceConfig, ComposeConfig
 
 class YAMLGenerator:
     def __init__(self):
@@ -24,6 +34,10 @@ class YAMLGenerator:
         if networks:
             compose_dict["networks"] = networks
         
+        volumes = self._extract_volumes(compose_config.services)
+        if volumes:
+            compose_dict["volumes"] = volumes
+
         #converting to yaml format with apt. formatting
 
         yaml_output = yaml.dump(
@@ -86,7 +100,10 @@ class YAMLGenerator:
         network_names = set()
         for service in services:
             network_names.update(service.networks)
-        
+
+            if service.depends_on and not service.networks:
+                network_names.add("default")
+
         if not network_names:
             return {}
         
@@ -99,7 +116,30 @@ class YAMLGenerator:
         
         return networks
     
+    def _extract_volumes(self, services: List[ServiceConfig]) -> Dict[str, Any]:
+        """
+        Extract named volumes from services and create top-level volume definitions.
+        Named volumes are those that don't start with '.' or '/' (not bind mounts).
+        e.g. 'postgres_data:/var/lib/postgresql/data' -> named volume 'postgres_data'
+             './data:/app' -> bind mount, skipped
 
+        arguements:: services: List of ServiceConfig objects
+        returns:: dict: Named volume definitions (empty dict = use Docker defaults)
+        """
+        named_volumes = set()
+
+        for service in services:
+            for volume_mapping in service.volumes:
+                source = volume_mapping.split(":")[0]  # get left side of "source:target"
+                # bind mounts start with . or / — skip them
+                if not source.startswith((".", "/")):
+                    named_volumes.add(source)
+
+        if not named_volumes:
+            return {}
+
+        # None value means Docker uses default volume settings
+        return {vol: {} for vol in sorted(named_volumes)}
 
 # testing yamlgenerator with basic information.
 def test_yaml_generator():
@@ -159,5 +199,15 @@ def test_yaml_generator():
 
 
 if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+    
+    # Add backend directory to Python path so absolute imports work
+    backend_dir = Path(__file__).parent.parent.parent
+    sys.path.insert(0, str(backend_dir))
+    
+    # Import RestartPolicy for standalone execution
+    from app.models import RestartPolicy
+    
     # Run test when script is executed directly
     test_yaml_generator()
