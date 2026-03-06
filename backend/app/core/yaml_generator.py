@@ -11,6 +11,7 @@ except ImportError:
     backend_dir = Path(__file__).parent.parent.parent
     sys.path.insert(0, str(backend_dir))
     from app.models import ServiceConfig, ComposeConfig
+    from app.core.yaml_formatter import dump_compose
 
 class YAMLGenerator:
     def __init__(self):
@@ -38,17 +39,21 @@ class YAMLGenerator:
         if volumes:
             compose_dict["volumes"] = volumes
 
+        # keeping the previous yaml_output commented for refernce, using helper functions from yaml_formatter for better formatting and section breaks.
+
         #converting to yaml format with apt. formatting
 
-        yaml_output = yaml.dump(
-            compose_dict,
-            default_flow_style=False,
-            sort_keys=False,
-            indent=2,
-            allow_unicode=True
-        )
+        # yaml_output = yaml.dump(
+        #     compose_dict,
+        #     default_flow_style=False,
+        #     sort_keys=False,
+        #     indent=2,
+        #     allow_unicode=True
+        # )
         
-        return yaml_output
+        # return yaml_output
+
+        return dump_compose(compose_dict)
 
     def _service_to_dict(self, service: ServiceConfig) -> Dict[str, Any]:
         """
@@ -207,7 +212,7 @@ if __name__ == "__main__":
     sys.path.insert(0, str(backend_dir))
     
     # Import RestartPolicy for standalone execution
-    from app.models import RestartPolicy
+    from app.models import RestartPolicy, ComposeConfig, ServiceConfig
     
     # Run test when script is executed directly
     test_yaml_generator()
