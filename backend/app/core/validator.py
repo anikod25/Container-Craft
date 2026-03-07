@@ -16,6 +16,7 @@ def validate_compose_config(services: List[ServiceConfig]) -> ValidationResponse
     check_port_conflicts(services, errors)
     check_image_names(services, errors)
     check_network_consistency(services, warnings)
+    check_environment_variables(services, warnings)
 
     return ValidationResponse(
         valid=len(errors) == 0,
@@ -120,3 +121,58 @@ def check_network_consistency(services: List[ServiceConfig], warnings: List[Vali
                         ),
                         severity="warning"
                     ))
+
+def check_environment_variables(services: List[ServiceConfig], warnings: List[ValidationError]) -> None:
+    """
+    Sanitize environment variables for common issues:
+    1. Empty values — likely a misconfiguration
+    2. Sensitive keys in plaintext — PASSWORD, SECRET, KEY, TOKEN should use Docker secrets
+    3. Invalid key names — must be UPPER_SNAKE_CASE, no spaces or special characters
+
+    argument:: services: List of ServiceConfig
+    argument:: warnings: List to append ValidationError (warning severity) objects into
+    """
+    SENSITIVE_KEYWORDS = {"PASSWORD", "SECRET", "KEY", "TOKEN", "API_KEY", "PRIVATE"}
+
+    # Valid env var name: starts with letter or underscore, only alphanumeric + underscore
+    valid_key_pattern = re.compile(r'^[A-Z_][A-Z0-9_]*$')
+
+    for service in services:
+        for key, value in service.environment.items():
+
+            # Check 1: invalid key name format
+            if not valid_key_pattern.match(key):
+                warnings.append(ValidationError(
+                    service=service.name,
+                    field="environment",
+                    message=(
+                        f"Environment variable '{key}' has an invalid name. "
+                        f"Keys should be UPPER_SNAKE_CASE (e.g. 'DATABASE_URL')."
+                    ),
+                    severity="warning"
+                ))
+
+            # Check 2: empty value
+            if value == "" or value is None:
+                warnings.append(ValidationError(
+                    service=service.name,
+                    field="environment",
+                    message=(
+                        f"Environment variable '{key}' has an empty value. "
+                        f"This may cause unexpected behavior."
+                    ),
+                    severity="warning"
+                ))
+
+            # Check 3: sensitive key with a plaintext value
+            key_upper = key.upper()
+            if any(keyword in key_upper for keyword in SENSITIVE_KEYWORDS) and value:
+                warnings.append(ValidationError(
+                    service=service.name,
+                    field="environment",
+                    message=(
+                        f"'{key}' appears to contain sensitive data in plaintext. "
+                        f"Consider using Docker secrets or a .env file instead."
+                    ),
+                    severity="warning"
+                ))
