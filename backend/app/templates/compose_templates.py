@@ -35,5 +35,63 @@ TEMPLATES = {
         "volumes": ["./app:/usr/src/app"],
         "working_dir": "/usr/src/app",
         "command": "npm start"
-    }
+    },
+    "mysql": {
+        "image": "mysql:latest",
+        "ports": ["3306:3306"],
+        "environment": {
+            "MYSQL_ROOT_PASSWORD": "rootpassword",
+            "MYSQL_DATABASE": "mydb",
+            "MYSQL_USER": "user",
+            "MYSQL_PASSWORD": "password"
+        },
+        "volumes": ["mysql_data:/var/lib/mysql"]
+    },
+    "mariadb": {
+        "image": "mariadb:latest",
+        "ports": ["3306:3306"],
+        "environment": {
+            "MARIADB_ROOT_PASSWORD": "rootpassword",
+            "MARIADB_DATABASE": "mydb",
+            "MARIADB_USER": "user",
+            "MARIADB_PASSWORD": "password"
+        },
+        "volumes": ["mariadb_data:/var/lib/mysql"]
+    },
+    "apache": {
+        "image": "httpd:latest",
+        "ports": ["80:80"],
+        "volumes": ["./public-html:/usr/local/apache2/htdocs"]
+    },
+    "node-custom": {
+        "build": ".",
+        "ports": ["3000:3000"],
+        "volumes": ["./app:/usr/src/app", "/usr/src/app/node_modules"],
+        "environment": {
+            "NODE_ENV": "development"
+        },
+        "command": "npm run dev"
+    },
+    "flask": {
+        "build": ".",
+        "ports": ["5000:5000"],
+        "volumes": ["./app:/app"],
+        "environment": {
+            "FLASK_APP": "app.py",
+            "FLASK_ENV": "development",
+            "FLASK_DEBUG": "1"
+        },
+        "command": "flask run --host=0.0.0.0"
+    },
+    "django": {
+        "build": ".",
+        "ports": ["8000:8000"],
+        "volumes": ["./app:/app"],
+        "environment": {
+            "DJANGO_SETTINGS_MODULE": "myproject.settings",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONUNBUFFERED": "1"
+        },
+        "command": "python manage.py runserver 0.0.0.0:8000"
+    },
 }
