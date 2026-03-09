@@ -54,3 +54,10 @@ async def validate(request: Request):
         "valid": len(errors) == 0,
         "errors": errors
     }
+
+
+# get endpoint api/stacks to get the list from stack templates in compose_templates.py
+@app.get("/api/stacks")
+async def get_stacks():
+    return TEMPLATES["stacks"]
+
