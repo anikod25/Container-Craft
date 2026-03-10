@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Optional
 from enum import Enum
 
@@ -8,6 +8,30 @@ class RestartPolicy(str, Enum):
     always = "always"
     on_failure = "on-failure"
     unless_stopped = "unless-stopped"
+
+class HealthCheck(BaseModel):
+    test: List[str] = Field(
+        ...,
+        description = "Test command (e.g., ['CMD', 'curl', '-f', 'http://localhost'])",
+        example = ["CMD", "curl", "-f", "http://localhost"]
+    )
+    interval: str = Field(default = "30s", description = "Time between checks (e.g., '30s', '1m')")
+    timeout: str = Field(default = "10s", description = "Max time for a single check (e.g., '10s')")
+    retries: int = Field(default = 3, description = "Consecutive failures before marked unhealthy")
+    start_period: str = Field(default = "0s", description = "Init time before failures count (e.g., '40s')")
+
+
+class BuildConfig(BaseModel):
+    context: str = Field(
+        ...,
+        description = "Path to build context (e.g., './backend')",
+        example = "./backend"
+    )
+    dockerfile: str = Field(
+        default = "Dockerfile",
+        description = "Dockerfile path relative to context",
+        example = "Dockerfile.prod"
+    )
 
 class ServiceConfig(BaseModel):
     """Model for a single Docker service configuration"""
@@ -63,8 +87,21 @@ class ServiceConfig(BaseModel):
         example="npm start"
     )
 
+    # needs new fields for healthcheck and build configurations
+
+    healthcheck: Optional[HealthCheck] = Field(
+        None,
+        description = "Healthcheck configuration for this service"
+    )
+
+    build: Optional[BuildConfig] = Field(
+        None,
+        description = "Build context config (custom Dockerfile). If set, used alongside or instead of image."
+    )
+
     # Validators
-    @validator('ports')
+    @field_validator('ports')
+    @classmethod
     def validate_ports(cls, v):
         """Ensure ports are in correct format"""
         for port in v:
@@ -82,7 +119,8 @@ class ServiceConfig(BaseModel):
                 raise ValueError(f"Port numbers must be integers: {port}")
         return v
     
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, v):
         """Ensure service name is valid"""
         if not v or not v.strip():
@@ -93,7 +131,8 @@ class ServiceConfig(BaseModel):
             raise ValueError("Service name must be lowercase alphanumeric with hyphens/underscores")
         return v
     
-    @validator('image')
+    @field_validator('image')
+    @classmethod
     def validate_image(cls, v):
         """Ensure image name is not empty"""
         if not v or not v.strip():
@@ -110,7 +149,18 @@ class ServiceConfig(BaseModel):
                 "volumes": ["./html:/usr/share/nginx/html:ro"],
                 "networks": ["frontend"],
                 "depends_on": [],
-                "restart": "unless-stopped"
+                "restart": "unless-stopped",
+                "healthcheck": {
+                    "test": ["CMD", "curl", "-f", "http://localhost"],
+                    "interval": "30s",
+                    "timeout": "10s",
+                    "retries": 3,
+                    "start_period": "0s"
+                },
+                "build": {
+                    "context": "./backend",
+                    "dockerfile": "Dockerfile"
+                }
             }
         }
 
@@ -129,7 +179,8 @@ class ComposeConfig(BaseModel):
         min_items=1
     )
     
-    @validator('services')
+    @field_validator('services')
+    @classmethod
     def validate_unique_names(cls, v):
         """Ensure all service names are unique"""
         names = [service.name for service in v]
@@ -138,7 +189,8 @@ class ComposeConfig(BaseModel):
             raise ValueError(f"Duplicate service names found: {duplicates}")
         return v
     
-    @validator('services')
+    @field_validator('services')
+    @classmethod
     def validate_dependencies(cls, v):
         """Ensure depends_on references exist"""
         service_names = {service.name for service in v}

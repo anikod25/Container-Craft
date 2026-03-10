@@ -17,6 +17,7 @@ def validate_compose_config(services: List[ServiceConfig]) -> ValidationResponse
     check_image_names(services, errors)
     check_network_consistency(services, warnings)
     check_environment_variables(services, warnings)
+    check_healthcheck(services, errors)
 
     return ValidationResponse(
         valid=len(errors) == 0,
@@ -176,3 +177,45 @@ def check_environment_variables(services: List[ServiceConfig], warnings: List[Va
                     ),
                     severity="warning"
                 ))
+
+def check_healthcheck(services: List[ServiceConfig], errors: List[ValidationError]) -> None:
+    """
+    Validate healthcheck fields if defined on a service.
+    Checks: duration format for interval/timeout/start_period, retries >= 1, test not empty.
+    """
+    duration_pattern = re.compile(r'^\d+(s|m|h)$')
+
+    for service in services:
+        if not service.healthcheck:
+            continue
+
+        hc = service.healthcheck
+
+        for field_name, value in [
+            ("interval", hc.interval),
+            ("timeout", hc.timeout),
+            ("start_period", hc.start_period)
+        ]:
+            if not duration_pattern.match(value):
+                errors.append(ValidationError(
+                    service=service.name,
+                    field=f"healthcheck.{field_name}",
+                    message=f"'{value}' is not a valid duration. Use format like '30s', '1m', '2h'.",
+                    severity="error"
+                ))
+
+        if hc.retries < 1:
+            errors.append(ValidationError(
+                service=service.name,
+                field="healthcheck.retries",
+                message="retries must be at least 1.",
+                severity="error"
+            ))
+
+        if not hc.test:
+            errors.append(ValidationError(
+                service=service.name,
+                field="healthcheck.test",
+                message="healthcheck.test must not be empty.",
+                severity="error"
+            ))

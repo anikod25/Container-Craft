@@ -3,7 +3,7 @@ import yaml
 # Handle imports for both module and script execution
 try:
     # When imported as a module (normal case)
-    from ..models import ServiceConfig, ComposeConfig
+    from ..models import ServiceConfig, ComposeConfig, RestartPolicy, HealthCheck, BuildConfig
 except ImportError:
     # When run as a script
     import sys
@@ -92,6 +92,23 @@ class YAMLGenerator:
         # add command if specified
         if service.command:
             service_dict["command"] = service.command
+
+        # add healthcheck if specified
+        if service.healthcheck:
+            service_dict["healthcheck"] = {
+                "test": service.healthcheck.test,
+                "interval": service.healthcheck.interval,
+                "timeout": service.healthcheck.timeout,
+                "retries": service.healthcheck.retries,
+                "start_period": service.healthcheck.start_period,
+            }
+
+        # add build config if specified
+        if service.build:
+            service_dict["build"] = {
+                "context": service.build.context,
+                "dockerfile": service.build.dockerfile,
+            }
         
         return service_dict
     
