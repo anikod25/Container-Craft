@@ -20,6 +20,9 @@ def validate_compose_config(services: List[ServiceConfig]) -> ValidationResponse
     check_healthcheck(services, errors)
     check_command(services, warnings)
     check_build_config(services, errors)
+    check_volume_paths(services, errors)        
+    check_network_mode(services, errors)        
+    check_resource_limits(services, errors) 
 
     return ValidationResponse(
         valid=len(errors) == 0,
@@ -262,3 +265,61 @@ def check_build_config(services: List[ServiceConfig], errors: List[ValidationErr
                 message="Dockerfile name cannot be empty. Defaults to 'Dockerfile' if not specified.",
                 severity="error"
             ))
+
+def check_volume_paths(services: List[ServiceConfig], errors: List[ValidationError]) -> None:
+    """
+    Validate volume mapping format and paths.
+    Checks:
+    1. Must contain ':' separator
+    2. Container path (right side) must be absolute (start with '/')
+    3. If a mode is specified (3rd part), must be 'ro' or 'rw'
+
+    argument:: services: List of ServiceConfig
+    argument:: errors: List to append ValidationError objects into
+    """
+    valid_modes = {"ro", "rw"}
+
+    for service in services:
+        for volume in service.volumes:
+            parts = volume.split(":")
+
+            # Check 1: must have at least source:target
+            if len(parts) < 2:
+                errors.append(ValidationError(
+                    service=service.name,
+                    field="volumes",
+                    message=(
+                        f"Volume '{volume}' is missing a ':' separator. "
+                        f"Expected format: 'source:target' or 'source:target:mode'."
+                    ),
+                    severity="error"
+                ))
+                continue
+
+            container_path = parts[1]
+
+            # Check 2: container path must be absolute
+            if not container_path.startswith("/"):
+                errors.append(ValidationError(
+                    service=service.name,
+                    field="volumes",
+                    message=(
+                        f"Volume '{volume}' has an invalid container path '{container_path}'. "
+                        f"Container path must be absolute (start with '/')."
+                    ),
+                    severity="error"
+                ))
+
+            # Check 3: if mode is specified, must be 'ro' or 'rw'
+            if len(parts) == 3:
+                mode = parts[2]
+                if mode not in valid_modes:
+                    errors.append(ValidationError(
+                        service=service.name,
+                        field="volumes",
+                        message=(
+                            f"Volume '{volume}' has an invalid mode '{mode}'. "
+                            f"Allowed modes are 'ro' (read-only) or 'rw' (read-write)."
+                        ),
+                        severity="error"
+                    ))

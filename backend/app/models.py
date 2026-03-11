@@ -196,7 +196,7 @@ class ComposeConfig(BaseModel):
     services: List[ServiceConfig] = Field(
         ...,
         description="List of services in the compose file",
-        min_items=1
+        min_length=1
     )
     
     @field_validator('services')
