@@ -17,6 +17,9 @@ def validate_compose_config(services: List[ServiceConfig]) -> ValidationResponse
     check_image_names(services, errors)
     check_network_consistency(services, warnings)
     check_environment_variables(services, warnings)
+    check_healthcheck(services, errors)
+    check_command(services, warnings)
+    check_build_config(services, errors)
 
     return ValidationResponse(
         valid=len(errors) == 0,
@@ -176,3 +179,86 @@ def check_environment_variables(services: List[ServiceConfig], warnings: List[Va
                     ),
                     severity="warning"
                 ))
+
+def check_healthcheck(services: List[ServiceConfig], errors: List[ValidationError]) -> None:
+    """
+    Validate healthcheck fields if defined on a service.
+    Checks: duration format for interval/timeout/start_period, retries >= 1, test not empty.
+    """
+    duration_pattern = re.compile(r'^\d+(s|m|h)$')
+
+    for service in services:
+        if not service.healthcheck:
+            continue
+
+        hc = service.healthcheck
+
+        for field_name, value in [
+            ("interval", hc.interval),
+            ("timeout", hc.timeout),
+            ("start_period", hc.start_period)
+        ]:
+            if not duration_pattern.match(value):
+                errors.append(ValidationError(
+                    service=service.name,
+                    field=f"healthcheck.{field_name}",
+                    message=f"'{value}' is not a valid duration. Use format like '30s', '1m', '2h'.",
+                    severity="error"
+                ))
+
+        if hc.retries < 1:
+            errors.append(ValidationError(
+                service=service.name,
+                field="healthcheck.retries",
+                message="retries must be at least 1.",
+                severity="error"
+            ))
+
+        if not hc.test:
+            errors.append(ValidationError(
+                service=service.name,
+                field="healthcheck.test",
+                message="healthcheck.test must not be empty.",
+                severity="error"
+            ))
+
+def check_command(services: List[ServiceConfig], warnings: List[ValidationError]) -> None:
+    """
+    Warn if command is an empty string (None is fine, empty string is likely a mistake).
+    """
+    for service in services:
+        if service.command is not None and not service.command.strip():
+            warnings.append(ValidationError(
+                service=service.name,
+                field="command",
+                message=(
+                    "Command is set but empty. Either provide a valid command "
+                    "or remove it to use the image default."
+                ),
+                severity="warning"
+            ))
+
+def check_build_config(services: List[ServiceConfig], errors: List[ValidationError]) -> None:
+    """
+    Validate build context if defined on a service.
+    Checks: context is not empty, dockerfile name is not empty.
+    """
+    for service in services:
+        if not service.build:
+            continue
+
+        if not service.build.context.strip():
+            errors.append(ValidationError(
+                service=service.name,
+                field="build.context",
+                message="Build context path cannot be empty.",
+                severity="error"
+            ))
+
+        if not service.build.dockerfile.strip():
+            errors.append(ValidationError(
+                service=service.name,
+                field="build.dockerfile",
+                message="Dockerfile name cannot be empty. Defaults to 'Dockerfile' if not specified.",
+                severity="error"
+            ))
