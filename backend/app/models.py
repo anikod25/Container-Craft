@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Optional
 from enum import Enum
+import json
 
 class RestartPolicy(str, Enum):
     """Restart policy options for Docker services"""
@@ -264,3 +265,84 @@ class ValidationResponse(BaseModel):
         default_factory=list,
         description="List of warnings"
     )
+
+
+# adding models for saving and epxortting the project save format (JSON)
+
+class ConnectionConfig(BaseModel):
+    """Represents a dependency connection between two services on the canvas"""
+    source: str = Field(..., description="Name of the source service")
+    target: str = Field(..., description="Name of the target (dependency) service")
+ 
+ 
+class CanvasState(BaseModel):
+    """Stores canvas-level UI state such as service node positions"""
+    positions: Dict[str, Dict[str, float]] = Field(
+        default_factory=dict,
+        description="Map of service name to its x/y position on the canvas (e.g. {'nginx': {'x': 100, 'y': 200}})"
+    )
+    zoom: float = Field(
+        default=1.0,
+        description="Current zoom level of the canvas"
+    )
+    pan_x: float = Field(
+        default=0.0,
+        description="Horizontal pan offset of the canvas"
+    )
+    pan_y: float = Field(
+        default=0.0,
+        description="Vertical pan offset of the canvas"
+    )
+ 
+ 
+class ProjectSave(BaseModel):
+    """
+    Project save format — captures the full state of a ContainerCraft project
+    so it can be serialised to JSON and reloaded later.
+ 
+    Schema:
+        {
+            "version": "1.0",
+            "name": "My Project",
+            "services": [...],
+            "connections": [...],
+            "canvas_state": {...}
+        }
+    """
+    version: str = Field(
+        default="1.0",
+        description="Save-format version, used for forward-compatibility checks"
+    )
+    name: str = Field(
+        ...,
+        description="Human-readable project name",
+        example="My Project"
+    )
+    services: List[ServiceConfig] = Field(
+        default_factory=list,
+        description="List of service configurations in the project"
+    )
+    connections: List[ConnectionConfig] = Field(
+        default_factory=list,
+        description="Explicit dependency connections drawn on the canvas"
+    )
+    canvas_state: CanvasState = Field(
+        default_factory=CanvasState,
+        description="Canvas UI state (positions, zoom, pan)"
+    )
+ 
+    class Config:
+        schema_extra = {
+            "example": {
+                "version": "1.0",
+                "name": "My Project",
+                "services": [],
+                "connections": [],
+                "canvas_state": {
+                    "positions": {"nginx": {"x": 100, "y": 200}},
+                    "zoom": 1.0,
+                    "pan_x": 0.0,
+                    "pan_y": 0.0
+                }
+            }
+        }
