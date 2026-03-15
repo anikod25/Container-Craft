@@ -31,4 +31,18 @@ def parse_compose_yaml(yaml_string: str) -> Tuple[List[ServiceConfig], List[str]
     """
     warnings: List[str] = []
 
+    try:
+        compose_dict = yaml.safe_load(yaml_string)
+    except yaml.YAMLError as e:
+        raise YAMLParseError(f"Invalid YAML syntax: {e}")
+ 
+    if not isinstance(compose_dict, dict):
+        raise YAMLParseError("YAML content is not a valid docker-compose structure.")
+ 
+    for key in compose_dict:
+        if key not in _SUPPORTED_TOP_LEVEL_KEYS:
+            warnings.append(
+                f"Top-level key '{key}' is not supported by ContainerCraft and was ignored."
+            )
+
     
