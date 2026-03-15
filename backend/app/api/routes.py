@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 from typing import List
+from pydantic import BaseModel
 
 from app.models import (
     ComposeConfig,
@@ -9,10 +10,20 @@ from app.models import (
     ValidationResponse,
 )
 from app.core.yaml_generator import YAMLGenerator
+from app.core.yaml_parser import parse_compose_yaml, YAMLParseError
 
 router = APIRouter()
 generator = YAMLGenerator()
 
+class ImportYAMLRequest(BaseModel):
+    """Request body for POST /api/import-yaml"""
+    yaml_content: str
+ 
+ 
+class ImportYAMLResponse(BaseModel):
+    """Response body for POST /api/import-yaml"""
+    services: List[ServiceConfig]
+    warnings: List[str]
 
 @router.post(
     "/compose/generate",
@@ -130,6 +141,40 @@ def preview_service(service: ServiceConfig) -> str:
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+@router.post(
+    "/api/import-yaml",
+    response_model=ImportYAMLResponse,
+    summary="Import a docker-compose YAML string",
+    description=(
+        "Parses a raw docker-compose.yml string and converts it into "
+        "ContainerCraft's internal ServiceConfig format. "
+        "Returns parsed services and a list of warnings for any unsupported "
+        "or complex features that were simplified or ignored."
+    ),
+)
+
+def import_yaml(request: ImportYAMLRequest) -> ImportYAMLResponse:
+    """
+    Import a docker-compose YAML string.
+ 
+    Handles:
+    - Invalid YAML syntax          → 400 with clear error message
+    - Missing services block       → 400 with clear error message
+    - Unsupported features         → parsed best-effort, listed in warnings
+    - Complex network configs      → simplified to named networks, listed in warnings
+    - environment list syntax      → converted to dict
+    - depends_on condition syntax  → converted to plain list
+    - build short syntax           → converted to BuildConfig object
+    - deploy.resources.limits      → mapped to cpu_limit / memory_limit
+    """
+    try:
+        services, warnings = parse_compose_yaml(request.yaml_content)
+    except YAMLParseError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error during import: {str(e)}")
+ 
+    return ImportYAMLResponse(services=services, warnings=warnings)
 
 def _detect_cycles(dep_map: dict) -> List[List[str]]:
     """
