@@ -247,6 +247,16 @@ class ComposeConfig(BaseModel):
 class ValidationError(BaseModel):
     """Model for validation errors"""
     service: str = Field(..., description="Service name with error")
+    type: str = Field(
+        ...,
+        description=(
+            "Machine-readable error category. Allowed values: "
+            "port_conflict, invalid_image, network_inconsistency, invalid_environment, "
+            "invalid_healthcheck, invalid_command, invalid_build, invalid_volume, "
+            "invalid_network_mode, invalid_resource_limit, "
+            "missing_dependency, circular_dependency, duplicate_service."
+        )
+    )
     field: str = Field(..., description="Field that has error")
     message: str = Field(..., description="Error message")
     severity: str = Field(

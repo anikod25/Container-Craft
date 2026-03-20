@@ -107,3 +107,52 @@ async def validate_import(request: Request):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not parse project for validation: {str(e)}")
  
+
+
+ # ----- Endpoints for docker deployments and error handling -----------
+
+from core.docker_manager import deploy_compose, get_project_status, DockerManagerError
+from pydantic import BaseModel
+
+class DeployRequest(BaseModel):
+    yaml_content: str
+    project_name: str
+
+@app.post("/app/deploy")
+async def deploy(request: DeployRequest):
+    """
+    Deploy a docker-compose project via the Docker SDK.
+ 
+    Writes the provided YAML to a temp file, runs `docker compose up -d`,
+    and returns the outcome. Returns 503 if the Docker daemon is unreachable,
+    400 if compose itself fails (bad config, port conflict, etc.).
+    """
+    try:
+        result = deploy_compose(request.yaml_content, request.project_name)
+        return result
+    except DockerManagerError as e:
+        # Distinguish daemon-not-running (503) from compose failures (400)
+        msg = str(e)
+        if "Could not connect" in msg or "command not found" in msg:
+            raise HTTPException(status_code=503, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected deployment error: {str(e)}")
+ 
+@app.get("/app/status/{project_name}")
+async def project_status(project_name: str):
+    """
+    Return the live container status for a deployed compose project.
+ 
+    Queries Docker for all containers labelled with the given project name
+    and returns per-container state plus an overall health summary.
+    Returns 503 if the Docker daemon is unreachable.
+    """
+    try:
+        result = get_project_status(project_name)
+        return result
+    except DockerManagerError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected status error: {str(e)}")
+ 
